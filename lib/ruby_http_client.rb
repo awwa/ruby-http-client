@@ -19,7 +19,7 @@ module SendGrid
 
   # A simple REST client.
   class Client
-    attr_reader :host, :request_headers, :url_path
+    attr_reader :host, :request_headers, :url_path, :request, :http
     # * *Args*    :
     #   - +host+ -> Base URL for the api. (e.g. https://api.sendgrid.com)
     #   - +request_headers+ -> A hash of the headers you want applied on
@@ -102,14 +102,9 @@ module SendGrid
     def build_args(args)
       args.each do |arg|
         arg.each do |key, value|
-          case key.to_s
-          when 'query_params'
-            @query_params = value
-          when 'request_headers'
-            update_headers(value)
-          when 'request_body'
-            @request_body = value
-          end
+          @query_params = value if key == 'query_params'
+          update_headers(value) if key == 'request_headers'
+          @request_body = value if key == 'request_body'
         end
       end
     end
@@ -142,18 +137,16 @@ module SendGrid
     def build_request(name, args)
       build_args(args) if args
       uri = build_url(query_params: @query_params)
-      http = Net::HTTP.new(uri.host, uri.port)
-      http = add_ssl(http)
-      net_http = Kernel.const_get('Net::HTTP::' + name.to_s.capitalize)
-      request = net_http.new(uri.request_uri)
-      request = build_request_headers(request)
-      request.body = @request_body.to_json if @request_body
-      if request.body
-        request['Content-Type'] = 'application/json'
-      elsif !request.body and (name.to_s == "post")
-        request['Content-Type'] = ''
+      @http = add_ssl(Net::HTTP.new(uri.host, uri.port))
+      net_http = Kernel.const_get("Net::HTTP::#{name.to_s.capitalize}")
+      @request = build_request_headers(net_http.new(uri.request_uri))
+      @request.body = @request_body.to_json if @request_body
+      if @request.body
+        @request['Content-Type'] = 'application/json'
+      elsif !@request.body && (name.to_s == 'post')
+        @request['Content-Type'] = ''
       end
-      make_request(http, request)
+      make_request(@http, @request)
     end
 
     # Make the API call and return the response. This is separated into
@@ -166,8 +159,7 @@ module SendGrid
     #   - Response object
     #
     def make_request(http, request)
-      response = http.request(request)
-      Response.new(response)
+      Response.new(http.request(request))
     end
 
     # Allow for https calls

@@ -90,6 +90,8 @@ class TestClient < Minitest::Test
     name = 'get'
     args = nil
     response = @client.build_request(name, args)
+    p @client.request['Content-Type']
+    p @client.http
     assert_equal(response.status_code, 200)
     assert_equal(response.body, 'message' => 'success')
     assert_equal(response.headers, 'headers' => 'test')
